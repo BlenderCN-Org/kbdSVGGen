@@ -327,6 +327,42 @@ serialNumber = do
         textSVG' (TextOpts f INSIDE_H KERN False 1 1) t' # reversePath # alignL
   return $ alignT $ center $ vsep 0.4 (map txt2svg (s : t ++ [s]))
 
+pentagram :: Double -> Double -> Path V2 Double
+pentagram s w =
+  let polys s' =
+        let a = union Winding (star (StarSkip 2) (regPoly 5 s'))
+            ev as = map fst $ filter (even . snd) $ zip as ([1 ..] :: [Integer])
+            st = a # moveOriginTo (pathCentroid a) # rotateBy (1 / 2)
+            v = ev (toVertices st)
+         in (st, v)
+      (a1, b1) = polys s
+      (a2, b2) = polys (s - w)
+      c1 =
+        union Winding $
+        mconcat $
+        zipWith
+          (\p a -> rect 1.5 (2.4 * w) # moveTo p # rotateAround p (a @@ deg))
+          b1
+          (scanl1 (+) (72 : repeat 108))
+      g = difference Winding a1 a2
+      h = difference Winding (fromVertices b1) (fromVertices b2)
+   in difference Winding (g <> h) c1
+
+logo_ :: Path V2 Double
+logo_ =
+  union Winding $
+  difference
+    Winding
+    (pentagram 21 9 <> difference Winding (circle 18) (circle 17))
+    c2
+  where
+    c1 =
+      rect 1 8 # rotate (36 @@ deg) # translate (unitY * 18) #
+      rotate (20 @@ deg)
+    c2 =
+      union Winding $
+      mconcat $ fmap (\a -> c1 # rotate (36 * a @@ deg)) [0 .. 9]
+
 topPlate :: KBD (Path V2 Double)
 topPlate = do
   (sh, rs, cs) <-
@@ -336,9 +372,7 @@ topPlate = do
   ashp <- allSwitchHolesPos
   bp <- bottomPlate
   isSplit <- asks _split
-  sn <- serialNumber
-  let lg' =
-        over (_Just . _3) ?? lg $ (\p -> vsep 5 [p, sn # scaleUToX (width p)])
+  let lg' = lg
       innerR = rect (sh + rs / 4 + 1) (sh + cs / 4 + 1)
       inner = placeRotated a ashp innerR
       addLogo l p
@@ -432,7 +466,7 @@ render k = do
           w = width $ head parts
       aStyles =
         fillTexture gradient :
-        fmap (\c -> fcA (c `withOpacity` 0.5)) (cycle [yellow, yellow, black, blue])
+        fmap (\c -> fcA (c `withOpacity` 0.5)) (cycle [yellow, yellow, black, red])
       diagram = reverse $ zipWith (\s p -> strokePath p # s) aStyles parts
       project = frame 1.05 (vsep 5 diagram) # lwO lineW
       assembly = frame 1.05 $ mconcat (scrs : kc : diagram) # lwO lineW
@@ -493,7 +527,6 @@ gallery ks =
 
 main :: IO ()
 main = do
-  l <- svgToPath "logo.svg"
   f <- bit
   now <- getCurrentTime
   let ds = formatTime defaultTimeLocale "%Y/%m/%d %H:%M:%S.%3q" now
@@ -518,7 +551,7 @@ main = do
           , _hooks = False
           , _split = False
           , _topNotch = False
-          , _logo = Just (35, 45, l)
+          , _logo = Just (35, 45, logo_)
           , _textFont = f
           , _date = ds
           , _uuid = u
@@ -537,11 +570,11 @@ main = do
       atreus62s = atreus62 & split .~ True
       atreus206 =
         atreus42 & nCols .~ 10 & nRows .~ 10 & nThumb .~ 3 &
-        (logo ?~ (60, 80, l)) &
+        (logo ?~ (60, 80, logo_)) &
         topNotch .~
         True
       atreus208 = atreus206 & nThumb .~ 4
-      atreus210 = atreus208 & nThumb .~ 5 & (logo ?~ (80, 90, l))
+      atreus210 = atreus208 & nThumb .~ 5 & (logo ?~ (80, 90, logo_))
       ks =
         [ atreus32
         , atreus42
